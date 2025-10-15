@@ -2,6 +2,11 @@
 Changelog for package trimble_gnss_driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.0.5 (2025-10-15)
+------------------
+* ROS2 version
+* Contributors: Michael Hutchinson, MikHut
+
 0.0.4 (2023-05-19)
 ------------------
 * Merge pull request `#4 <https://github.com/SAGARobotics/trimble_gnss_driver/issues/4>`_ from polymathrobotics/master

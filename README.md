@@ -1,2 +1,2 @@
 # trimble_gnss_driver
-A ROS driver for Trimble GNSS GSOF messages
+A ROS2 driver for Trimble GNSS GSOF messages
