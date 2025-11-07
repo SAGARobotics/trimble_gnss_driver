@@ -16,7 +16,6 @@ import math
 import time
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
 
 # from tf_transformations import  quaternion_from_euler
 from geometry_msgs.msg import Quaternion
@@ -53,7 +52,7 @@ def quaternion_from_euler(roll, pitch, yaw):
     """
     Conveniance function to convert quaternion to euluer.
     To be replaced by tf_transformations when we upgrade to Ubuntu 22
-    """    
+    """
     cy = math.cos(yaw * 0.5)
     sy = math.sin(yaw * 0.5)
     cp = math.cos(pitch * 0.5)
@@ -76,8 +75,8 @@ class GSOFDriver(Node):
     def __init__(self):
         super().__init__('trimble_gnss_driver')
 
-        port = self.declare_parameter('rtk_port', 21098).value
-        ip = self.declare_parameter('rtk_ip', '192.168.0.50').value
+        self.port = self.declare_parameter('rtk_port', 21098).value
+        self.ip = self.declare_parameter('rtk_ip', '192.168.0.50').value
         self.output_frame_id = self.declare_parameter('output_frame_id','gps_main').value
 
         apply_dual_antenna_offset = self.declare_parameter('apply_dual_antenna_offset', False).value
@@ -92,7 +91,7 @@ class GSOFDriver(Node):
         self.get_logger().info(f'Heading offset is {self.heading_offset}')
 
         self.fix_pub = self.create_publisher(NavSatFix, 'fix', 10)
-    
+
         # For attitude, use IMU msg to keep compatible with robot_localization
         # But note that this is not only from an IMU
         self.attitude_pub = self.create_publisher(Imu, 'attitude', 10)
@@ -103,7 +102,7 @@ class GSOFDriver(Node):
         # we don't measure roll/pitch
         self.yaw_pub = self.create_publisher(Imu, 'yaw', 10)
 
-        self.client = self.setup_connection(ip , port)
+        self.client = self.setup_connection()
 
         self.buffer = b''
         self.msg_dict = {}
@@ -129,8 +128,7 @@ class GSOFDriver(Node):
         current_time = self.get_clock().now()
         self.current_time_msg = current_time.to_msg()
         self.current_time_seconds = current_time.nanoseconds * 1e-9
-        if not self.get_message_header():
-            self.get_logger().warn("Invalid checksum, skipping")
+        if not self.get_message():
             return
         self.get_records()
 
@@ -342,9 +340,7 @@ class GSOFDriver(Node):
         return heading_offset
 
 
-    def setup_connection(self, _ip, _port):
-        port = _port
-        ip = None
+    def setup_connection(self):
         attempts_limit = 10
         current_attempt = 0
         connected = False
@@ -358,14 +354,14 @@ class GSOFDriver(Node):
             try:
                 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 client.settimeout(5)
-                ip = socket.gethostbyname(_ip)
-                address = (ip, port)
+                ip = socket.gethostbyname(self.ip)
+                address = (ip, self.port)
 
-                self.get_logger().info(f'Attempting connection to {ip}:{port}')
+                self.get_logger().info(f'Attempting connection to {ip}:{self.port}')
                 client.connect(address)
 
                 self.get_logger().info("=====================================")
-                self.get_logger().info(f'Connected to {ip}:{port}')
+                self.get_logger().info(f'Connected to {ip}:{self.port}')
                 self.get_logger().info("=====================================")
                 connected = True
             except Exception as e:
@@ -379,7 +375,7 @@ class GSOFDriver(Node):
         return client
 
 
-    def get_message_header(self):
+    def get_message(self):
         while len(self.buffer) < 7:
             try:
                 self.buffer += self.client.recv(7)
@@ -396,7 +392,7 @@ class GSOFDriver(Node):
             try:
                 self.buffer += self.client.recv(total_length - len(self.buffer))
             except socket.timeout:
-                self.get_logger().warn("Socket timeout while reading message header")
+                self.get_logger().warn("Socket timeout while reading message")
                 self.setup_connection()
                 return False
 
@@ -411,6 +407,7 @@ class GSOFDriver(Node):
         if checksum - self.checksum256(self.msg_bytes + self.buffer[1:7]) == 0:
             self.checksum = True
         else:
+            self.get_logger().warn("Invalid checksum detected.")
             self.checksum = False
 
         self.buffer = self.buffer[total_length-1:]  # Remove the message header and data from the buffer
